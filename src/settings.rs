@@ -25,4 +25,24 @@ pub static SETTINGS: Lazy<Settings> = Lazy::new(|| {
 #[allow(unused)]
 pub struct Settings {
     pub port: u16,
+    pub database: DatabaseSettings,
+}
+
+#[derive(serde::Deserialize)]
+#[allow(unused)]
+pub struct DatabaseSettings {
+    pub name: String,
+    pub username: String,
+    pub password: String,
+    pub host: String,
+    pub port: u16,
+}
+
+impl DatabaseSettings {
+    pub fn url(&self) -> String {
+        format!(
+            "postgres://{}:{}@{}:{}/{}",
+            self.username, self.password, self.host, self.port, self.name
+        )
+    }
 }
