@@ -6,14 +6,36 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Test
+  lint-and-test:
+    name: Lint & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Docker Compose
+        run: docker compose up -d
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
       - uses: Swatinem/rust-cache@v2
-      - name: Run tests
+
+      - name: Install sqlx-cli
+        run:
+          cargo install sqlx-cli
+          --version=0.6.3
+          --features rustls,postgres
+          --no-default-features
+
+      - name: Migrate Database
+        run: source .env && sqlx migrate run
+
+      - name: Linting
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Testing
         run: cargo test
 
   fmt:
@@ -26,15 +48,3 @@ jobs:
           components: rustfmt
       - name: Enforce formatting
         run: cargo fmt --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: Linting
-        run: cargo clippy --all-targets --all-features -- -D warnings
