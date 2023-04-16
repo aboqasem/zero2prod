@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+cargo watch -x "clippy --all-targets --all-features -- -D warnings" -x "test -- --nocapture" -x "run"
