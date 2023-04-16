@@ -1,14 +1,36 @@
+extern crate zero2prod;
+
+use sqlx::Connection;
+use sqlx::PgConnection;
+
+use zero2prod::settings::SETTINGS;
+
 use crate::utils::spawn_server;
 
 mod utils;
 
 #[tokio::test]
-async fn subscribe_with_valid_data_is_201() {
+async fn subscribe_with_valid_data_should_create_subscription() {
     let address = spawn_server();
 
     let client = reqwest::Client::new();
 
-    let body = "name=Mohammad%20Al%20Zouabi&email=mb.alzouabi%40gmail.com";
+    let name = "Mohammad Al Zouabi";
+    let email = "mb.alzouabi@gmail.com";
+
+    let mut conn = PgConnection::connect(&SETTINGS.database.url())
+        .await
+        .expect("Failed to connect to Postgres");
+
+    sqlx::query!(
+        "SELECT email, name FROM subscriptions WHERE email = $1",
+        email
+    )
+    .fetch_one(&mut conn)
+    .await
+    .expect_err("Should not find a subscription with this email");
+
+    let body = format!("name={name}&email={email}");
     let res = client
         .post(format!("{address}/subscriptions"))
         .body(body)
@@ -18,18 +40,32 @@ async fn subscribe_with_valid_data_is_201() {
         .expect("Failed to POST /subscriptions");
 
     assert_eq!(201, res.status().as_u16());
+
+    let saved_subscription = sqlx::query!(
+        "SELECT email, name FROM subscriptions WHERE email = $1",
+        email
+    )
+    .fetch_one(&mut conn)
+    .await
+    .expect("Should find a subscription with this email");
+
+    assert_eq!(saved_subscription.email, email);
+    assert_eq!(saved_subscription.name, name);
 }
 
 #[tokio::test]
-async fn subscribe_with_invalid_data_is_400() {
+async fn subscribe_with_invalid_data_should_fail() {
     let address = spawn_server();
 
     let client = reqwest::Client::new();
 
+    let name = "Mohammad Al Zouabi";
+    let email = "mb.alzouabi@gmail.com";
+
     let invalid_bodies = vec![
-        ("name=Mohammad%20Al%20Zouabi", "missing the email"),
-        ("email=mb.alzouabi%40gmail.com", "missing the name"),
-        ("", "missing both of email and name"),
+        (format!("name={name}"), "missing the email"),
+        (format!("email={email}"), "missing the name"),
+        ("".to_string(), "missing both of email and name"),
     ];
 
     for (body, desc) in invalid_bodies {
