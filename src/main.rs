@@ -14,6 +14,6 @@ async fn main() -> std::io::Result<()> {
 
     let port = SETTINGS.port;
     run(TcpListener::bind(format!("127.0.0.1:{port}"))
-        .expect(format!("Failed to bind to port {port}").as_str()))?
+        .unwrap_or_else(|_| panic!("Failed to bind to port {port}")))?
     .await
 }
