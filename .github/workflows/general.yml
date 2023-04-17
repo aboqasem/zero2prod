@@ -30,7 +30,7 @@ jobs:
           --no-default-features
 
       - name: Migrate Database
-        run: source .env && sqlx migrate run
+        run: ./scripts/migrate
 
       - name: Linting
         run: cargo clippy --all-targets --all-features -- -D warnings
