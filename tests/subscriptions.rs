@@ -1,32 +1,23 @@
 extern crate zero2prod;
 
-use sqlx::Connection;
-use sqlx::PgConnection;
-
-use zero2prod::settings::SETTINGS;
-
 use crate::utils::spawn_server;
 
 mod utils;
 
 #[tokio::test]
 async fn subscribe_with_valid_data_should_create_subscription() {
-    let address = spawn_server();
+    let (address, pool) = spawn_server().await;
 
     let client = reqwest::Client::new();
 
     let name = "Mohammad Al Zouabi";
     let email = "mb.alzouabi@gmail.com";
 
-    let mut conn = PgConnection::connect(&SETTINGS.database.url())
-        .await
-        .expect("Failed to connect to Postgres");
-
     sqlx::query!(
         "SELECT email, name FROM subscriptions WHERE email = $1",
         email
     )
-    .fetch_one(&mut conn)
+    .fetch_one(&pool)
     .await
     .expect_err("Should not find a subscription with this email");
 
@@ -45,7 +36,7 @@ async fn subscribe_with_valid_data_should_create_subscription() {
         "SELECT email, name FROM subscriptions WHERE email = $1",
         email
     )
-    .fetch_one(&mut conn)
+    .fetch_one(&pool)
     .await
     .expect("Should find a subscription with this email");
 
@@ -55,7 +46,7 @@ async fn subscribe_with_valid_data_should_create_subscription() {
 
 #[tokio::test]
 async fn subscribe_with_invalid_data_should_fail() {
-    let address = spawn_server();
+    let (address, _) = spawn_server().await;
 
     let client = reqwest::Client::new();
 

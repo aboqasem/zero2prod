@@ -4,7 +4,7 @@ mod utils;
 
 #[tokio::test]
 async fn health_check_works() {
-    let address = spawn_server();
+    let (address, _) = spawn_server().await;
 
     let client = reqwest::Client::new();
 
