@@ -45,4 +45,11 @@ impl DatabaseSettings {
             self.username, self.password, self.host, self.port, self.name
         )
     }
+
+    pub fn url_without_db_name(&self) -> String {
+        format!(
+            "postgres://{}:{}@{}:{}",
+            self.username, self.password, self.host, self.port
+        )
+    }
 }
