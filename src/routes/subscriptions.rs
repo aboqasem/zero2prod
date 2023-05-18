@@ -1,13 +1,31 @@
-use std::fmt::Formatter;
-
 use actix_web::{web, HttpResponse, Responder};
 use sqlx::PgPool;
 
+#[tracing::instrument(
+    name = "Adding new subscriber",
+    skip(data, pool),
+    fields(
+        subscriber.email = data.email,
+        subscriber.name = data.name,
+    ),
+)]
 pub async fn subscribe(
     data: web::Form<SubscriptionData>,
     pool: web::Data<PgPool>,
 ) -> impl Responder {
-    let insertion = sqlx::query!(
+    match insert_subscriber(&data, &pool).await {
+        Ok(_) => HttpResponse::Created().json(SubscriptionResponse {
+            message: "Subscribed!".into(),
+        }),
+        Err(_) => HttpResponse::InternalServerError().json(SubscriptionResponse {
+            message: "Failed to subscribe".into(),
+        }),
+    }
+}
+
+#[tracing::instrument(name = "Inserting subscriber to DB", skip(data, pool))]
+async fn insert_subscriber(data: &SubscriptionData, pool: &PgPool) -> Result<(), sqlx::Error> {
+    sqlx::query!(
         r#"
         INSERT INTO subscriptions
         VALUES ($1, $2, $3, $4)
@@ -17,33 +35,20 @@ pub async fn subscribe(
         data.name,
         chrono::Utc::now()
     )
-    .execute(pool.get_ref())
-    .await;
+    .execute(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to insert subscriber: {}", e);
+        e
+    })?;
 
-    match insertion {
-        Ok(_) => HttpResponse::Created().json(SubscriptionResponse {
-            message: "Subscribed!".to_string(),
-        }),
-        Err(error) => {
-            eprintln!("Failed to subscribe: {}", error);
-
-            HttpResponse::InternalServerError().json(SubscriptionResponse {
-                message: "Failed to subscribe".to_string(),
-            })
-        }
-    }
+    Ok(())
 }
 
 #[derive(serde::Deserialize)]
 pub struct SubscriptionData {
     name: String,
     email: String,
-}
-
-impl std::fmt::Display for SubscriptionData {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{ name: {}, email: {} }}", self.name, self.email)
-    }
 }
 
 #[derive(serde::Serialize)]

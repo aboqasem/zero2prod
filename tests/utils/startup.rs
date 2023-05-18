@@ -1,12 +1,23 @@
+use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
+use std::sync::Once;
 use uuid::Uuid;
 use zero2prod::settings::SETTINGS;
 use zero2prod::startup::run_server;
+use zero2prod::telemetry::{build_subscriber, register_global_subscriber};
 
 pub type Address = String;
 
+static INIT_TELEMETRY: Once = Once::new();
+
 pub async fn spawn_server() -> (Address, PgPool) {
+    INIT_TELEMETRY.call_once(|| {
+        let subscriber = build_subscriber("test".into(), "info");
+
+        register_global_subscriber(subscriber);
+    });
+
     let pool = create_random_database().await;
 
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
@@ -21,7 +32,7 @@ pub async fn spawn_server() -> (Address, PgPool) {
 pub async fn create_random_database() -> PgPool {
     let url_without_db_name = &SETTINGS.database.url_without_db_name();
 
-    let mut conn = PgConnection::connect(url_without_db_name)
+    let mut conn = PgConnection::connect(url_without_db_name.expose_secret())
         .await
         .expect("Failed to connect to Postgres");
 
@@ -30,9 +41,10 @@ pub async fn create_random_database() -> PgPool {
         .await
         .expect("Failed to create database");
 
-    let pool = PgPool::connect(format!("{}/{}", url_without_db_name, db_name).as_str())
-        .await
-        .expect("Failed to connect to Postgres");
+    let pool =
+        PgPool::connect(format!("{}/{}", url_without_db_name.expose_secret(), db_name).as_str())
+            .await
+            .expect("Failed to connect to Postgres");
 
     sqlx::migrate!()
         .run(&pool)

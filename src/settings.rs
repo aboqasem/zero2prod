@@ -2,6 +2,7 @@ use std::env;
 
 use config::{Config, File};
 use once_cell::sync::Lazy;
+use secrecy::{ExposeSecret, Secret};
 
 pub static SETTINGS: Lazy<Settings> = Lazy::new(|| {
     let run_mode = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
@@ -33,23 +34,32 @@ pub struct Settings {
 pub struct DatabaseSettings {
     pub name: String,
     pub username: String,
-    pub password: String,
+    pub password: Secret<String>,
     pub host: String,
     pub port: u16,
 }
 
 impl DatabaseSettings {
-    pub fn url(&self) -> String {
+    pub fn url(&self) -> Secret<String> {
         format!(
             "postgres://{}:{}@{}:{}/{}",
-            self.username, self.password, self.host, self.port, self.name
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port,
+            self.name
         )
+        .into()
     }
 
-    pub fn url_without_db_name(&self) -> String {
+    pub fn url_without_db_name(&self) -> Secret<String> {
         format!(
             "postgres://{}:{}@{}:{}",
-            self.username, self.password, self.host, self.port
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port
         )
+        .into()
     }
 }

@@ -1,12 +1,18 @@
-use sqlx::PgPool;
+use secrecy::ExposeSecret;
 use std::net::TcpListener;
+
+use sqlx::PgPool;
 
 use zero2prod::settings::SETTINGS;
 use zero2prod::startup::run_server;
+use zero2prod::telemetry::{build_subscriber, register_global_subscriber};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let pool = PgPool::connect(&SETTINGS.database.url())
+    let subscriber = build_subscriber("zero2prod".into(), "info");
+    register_global_subscriber(subscriber);
+
+    let pool = PgPool::connect(SETTINGS.database.url().expose_secret())
         .await
         .expect("Failed to connect to Postgres");
 
