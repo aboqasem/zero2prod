@@ -4,6 +4,7 @@ use config::{Config, Environment, File};
 use once_cell::sync::Lazy;
 use secrecy::{ExposeSecret, Secret};
 use serde_aux::field_attributes::deserialize_number_from_string;
+use sqlx::postgres::PgConnectOptions;
 
 pub static SETTINGS: Lazy<Settings> = Lazy::new(|| {
     let run_mode = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
@@ -57,26 +58,15 @@ pub struct DatabaseSettings {
 }
 
 impl DatabaseSettings {
-    pub fn url(&self) -> Secret<String> {
-        format!(
-            "postgres://{}:{}@{}:{}/{}",
-            self.username,
-            self.password.expose_secret(),
-            self.host,
-            self.port,
-            self.name
-        )
-        .into()
+    pub fn without_db(&self) -> PgConnectOptions {
+        PgConnectOptions::new()
+            .host(&self.host)
+            .port(self.port)
+            .username(&self.username)
+            .password(self.password.expose_secret())
     }
 
-    pub fn url_without_db_name(&self) -> Secret<String> {
-        format!(
-            "postgres://{}:{}@{}:{}",
-            self.username,
-            self.password.expose_secret(),
-            self.host,
-            self.port
-        )
-        .into()
+    pub fn with_db(&self) -> PgConnectOptions {
+        self.without_db().database(&self.name)
     }
 }
