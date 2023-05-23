@@ -4,7 +4,7 @@ use config::{Config, Environment, File};
 use once_cell::sync::Lazy;
 use secrecy::{ExposeSecret, Secret};
 use serde_aux::field_attributes::deserialize_number_from_string;
-use sqlx::postgres::PgConnectOptions;
+use sqlx::postgres::{PgConnectOptions, PgSslMode};
 
 pub static SETTINGS: Lazy<Settings> = Lazy::new(|| {
     let run_mode = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
@@ -55,6 +55,7 @@ pub struct DatabaseSettings {
     pub host: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
+    pub require_ssl: bool,
 }
 
 impl DatabaseSettings {
@@ -64,6 +65,11 @@ impl DatabaseSettings {
             .port(self.port)
             .username(&self.username)
             .password(self.password.expose_secret())
+            .ssl_mode(if self.require_ssl {
+                PgSslMode::Require
+            } else {
+                PgSslMode::Prefer
+            })
     }
 
     pub fn with_db(&self) -> PgConnectOptions {
