@@ -1,4 +1,5 @@
-port: 8000
+app:
+  port: 8000
 database:
   name: "newsletter"
   username: "postgres"

@@ -25,8 +25,15 @@ pub static SETTINGS: Lazy<Settings> = Lazy::new(|| {
 #[derive(serde::Deserialize)]
 #[allow(unused)]
 pub struct Settings {
-    pub port: u16,
+    pub app: AppSettings,
     pub database: DatabaseSettings,
+}
+
+#[derive(serde::Deserialize)]
+#[allow(unused)]
+pub struct AppSettings {
+    pub host: String,
+    pub port: u16,
 }
 
 #[derive(serde::Deserialize)]

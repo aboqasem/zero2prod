@@ -17,8 +17,8 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to connect to Postgres");
 
     let listener = {
-        let port = SETTINGS.port;
-        let address = format!("127.0.0.1:{port}");
+        let (host, port) = (&SETTINGS.app.host, SETTINGS.app.port);
+        let address = format!("{host}:{port}");
         TcpListener::bind(address).unwrap_or_else(|_| panic!("Failed to bind to port {port}"))
     };
 
