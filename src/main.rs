@@ -1,4 +1,3 @@
-use sqlx::ConnectOptions;
 use std::net::TcpListener;
 use std::time::Duration;
 
