@@ -1,6 +1,9 @@
 extern crate zero2prod;
 
 use crate::utils::spawn_server;
+use fake::faker::internet::en::SafeEmail;
+use fake::faker::name::en::Name;
+use fake::Fake;
 
 mod utils;
 
@@ -10,8 +13,8 @@ async fn subscribe_with_valid_data_should_create_subscription() {
 
     let client = reqwest::Client::new();
 
-    let name = "Mohammad Al Zouabi";
-    let email = "mb.alzouabi@gmail.com";
+    let name: String = Name().fake();
+    let email: String = SafeEmail().fake();
 
     sqlx::query!(
         "SELECT email, name FROM subscriptions WHERE email = $1",
@@ -50,13 +53,21 @@ async fn subscribe_with_invalid_data_should_fail() {
 
     let client = reqwest::Client::new();
 
-    let name = "Mohammad Al Zouabi";
-    let email = "mb.alzouabi@gmail.com";
+    let name: String = Name().fake();
+    let email: String = SafeEmail().fake();
 
     let invalid_bodies = vec![
         (format!("name={name}"), "missing the email"),
         (format!("email={email}"), "missing the name"),
         ("".to_string(), "missing both of email and name"),
+        (
+            "name=&email=".to_string(),
+            "both of email and name are blank",
+        ),
+        (
+            format!("name=;DROP TABLE subscriptions;--&email={email}"),
+            "has forbidden characters",
+        ),
     ];
 
     for (body, desc) in invalid_bodies {
