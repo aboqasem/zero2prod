@@ -5,8 +5,6 @@ use fake::faker::internet::en::SafeEmail;
 use fake::faker::name::en::Name;
 use fake::Fake;
 
-mod utils;
-
 #[tokio::test]
 async fn subscribe_with_valid_data_should_create_subscription() {
     let (address, pool) = spawn_server().await;

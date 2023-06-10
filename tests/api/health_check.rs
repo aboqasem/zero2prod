@@ -1,7 +1,5 @@
 use crate::utils::spawn_server;
 
-mod utils;
-
 #[tokio::test]
 async fn health_check_works() {
     let (address, _) = spawn_server().await;
