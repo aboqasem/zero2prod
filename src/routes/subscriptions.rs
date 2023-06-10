@@ -1,7 +1,7 @@
 use actix_web::{web, HttpResponse, Responder};
 use sqlx::PgPool;
 
-use crate::domain::{RawSubscriber, Subscriber};
+use crate::domain::{RawSubscriber, Subscriber, SubscriptionStatus};
 
 #[tracing::instrument(
 name = "Adding new subscriber",
@@ -35,12 +35,13 @@ async fn insert_subscriber(subscriber: &Subscriber, pool: &PgPool) -> Result<(),
     sqlx::query!(
         r#"
         INSERT INTO subscriptions
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $5)
         "#,
         uuid::Uuid::new_v4(),
         subscriber.email.as_ref(),
         subscriber.name.as_ref(),
-        chrono::Utc::now()
+        chrono::Utc::now(),
+        SubscriptionStatus::Confirmed as _
     )
     .execute(pool)
     .await

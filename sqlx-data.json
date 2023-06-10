@@ -1,6 +1,6 @@
 {
   "db": "PostgreSQL",
-  "6cc1f22921f344f05af96a9be789891a5fbffe4b273489361c0a4356b5b54596": {
+  "94acd04562fd53142d161d18321c040d78478e5e4143a5ff74ac3ec8dd35eeb8": {
     "describe": {
       "columns": [],
       "nullable": [],
@@ -9,10 +9,21 @@
           "Uuid",
           "Text",
           "Text",
-          "Timestamptz"
+          "Timestamptz",
+          {
+            "Custom": {
+              "kind": {
+                "Enum": [
+                  "PENDING_CONFIRMATION",
+                  "CONFIRMED"
+                ]
+              },
+              "name": "subscription_status"
+            }
+          }
         ]
       }
     },
-    "query": "\n        INSERT INTO subscriptions\n        VALUES ($1, $2, $3, $4)\n        "
+    "query": "\n        INSERT INTO subscriptions\n        VALUES ($1, $2, $3, $4, $5)\n        "
   }
 }

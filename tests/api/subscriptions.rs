@@ -5,6 +5,8 @@ use fake::faker::internet::en::SafeEmail;
 use fake::faker::name::en::Name;
 use fake::Fake;
 
+use zero2prod::domain::SubscriptionStatus;
+
 #[tokio::test]
 async fn subscribe_with_valid_data_should_create_subscription() {
     let (address, pool) = spawn_server().await;
@@ -34,7 +36,7 @@ async fn subscribe_with_valid_data_should_create_subscription() {
     assert_eq!(201, res.status().as_u16());
 
     let saved_subscription = sqlx::query!(
-        "SELECT email, name FROM subscriptions WHERE email = $1",
+        r#"SELECT email, name, status as "status: SubscriptionStatus"  FROM subscriptions WHERE email = $1"#,
         email
     )
     .fetch_one(&pool)
@@ -43,6 +45,7 @@ async fn subscribe_with_valid_data_should_create_subscription() {
 
     assert_eq!(saved_subscription.email, email);
     assert_eq!(saved_subscription.name, name);
+    assert_eq!(saved_subscription.status, SubscriptionStatus::Confirmed);
 }
 
 #[tokio::test]
