@@ -1,16 +1,25 @@
 extern crate zero2prod;
 
-use crate::utils::spawn_server;
 use fake::faker::internet::en::SafeEmail;
 use fake::faker::name::en::Name;
 use fake::Fake;
+use reqwest::{Method, StatusCode};
+use wiremock::matchers::{header, header_regex, method, path};
+use wiremock::{Mock, ResponseTemplate};
 
 use zero2prod::domain::SubscriptionStatus;
+use zero2prod::email::send_grid;
+
+use crate::utils::{spawn_server, App};
 
 #[tokio::test]
 async fn subscribe_with_valid_data_should_create_subscription() {
-    let (address, pool) = spawn_server().await;
-
+    // Given
+    let App {
+        address,
+        pool,
+        email_server,
+    } = spawn_server().await;
     let client = reqwest::Client::new();
 
     let name: String = Name().fake();
@@ -24,7 +33,18 @@ async fn subscribe_with_valid_data_should_create_subscription() {
     .await
     .expect_err("Should not find a subscription with this email");
 
+    Mock::given(method(Method::POST))
+        .and(path(send_grid::SEND_PATH))
+        .and(header_regex("Authorization", r"Bearer \w+"))
+        .and(header("Content-Type", "application/json"))
+        .respond_with(ResponseTemplate::new(StatusCode::OK))
+        .expect(1)
+        .mount(&email_server)
+        .await;
+
     let body = format!("name={name}&email={email}");
+
+    // When
     let res = client
         .post(format!("{address}/subscriptions"))
         .body(body)
@@ -33,6 +53,7 @@ async fn subscribe_with_valid_data_should_create_subscription() {
         .await
         .expect("Failed to POST /subscriptions");
 
+    // Then
     assert_eq!(201, res.status().as_u16());
 
     let saved_subscription = sqlx::query!(
@@ -50,8 +71,8 @@ async fn subscribe_with_valid_data_should_create_subscription() {
 
 #[tokio::test]
 async fn subscribe_with_invalid_data_should_fail() {
-    let (address, _) = spawn_server().await;
-
+    // Given
+    let App { address, .. } = spawn_server().await;
     let client = reqwest::Client::new();
 
     let name: String = Name().fake();
@@ -72,6 +93,7 @@ async fn subscribe_with_invalid_data_should_fail() {
     ];
 
     for (body, desc) in invalid_bodies {
+        // When
         let res = client
             .post(format!("{address}/subscriptions"))
             .body(body)
@@ -80,6 +102,7 @@ async fn subscribe_with_invalid_data_should_fail() {
             .await
             .expect("Failed to POST /subscriptions");
 
+        // Then
         assert_eq!(
             400,
             res.status().as_u16(),

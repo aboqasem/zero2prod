@@ -1,19 +1,29 @@
 use std::net::TcpListener;
 use std::sync::Once;
+use std::time::Duration;
 
+use fake::faker::internet::en::SafeEmail;
+use fake::{Fake, Faker};
+use secrecy::Secret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
-use zero2prod::email::EmailClient;
+use wiremock::MockServer;
 
+use zero2prod::domain::EmailAddress;
+use zero2prod::email::EmailClient;
 use zero2prod::settings::SETTINGS;
 use zero2prod::startup::run_server;
 use zero2prod::telemetry::{build_subscriber, register_global_subscriber};
 
-pub type Address = String;
+pub struct App {
+    pub address: String,
+    pub pool: PgPool,
+    pub email_server: MockServer,
+}
 
 static INIT_TELEMETRY: Once = Once::new();
 
-pub async fn spawn_server() -> (Address, PgPool) {
+pub async fn spawn_server() -> App {
     INIT_TELEMETRY.call_once(|| {
         let subscriber = build_subscriber("test".into(), "info");
 
@@ -25,13 +35,24 @@ pub async fn spawn_server() -> (Address, PgPool) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
     let address = format!("http://{}", listener.local_addr().unwrap());
 
-    let email_client = EmailClient::default();
+    let email_server = MockServer::start().await;
+    let email_client = EmailClient::new(
+        email_server.uri(),
+        Secret::new(Faker.fake()),
+        EmailAddress::parse(SafeEmail().fake()).unwrap(),
+        Duration::from_millis(200),
+        true,
+    );
 
     let server = run_server(listener, &pool, email_client).expect("Failed to start server");
 
     tokio::spawn(server);
 
-    (address, pool)
+    App {
+        address,
+        pool,
+        email_server,
+    }
 }
 
 pub async fn create_random_database() -> PgPool {
