@@ -6,6 +6,8 @@ use secrecy::{ExposeSecret, Secret};
 use serde_aux::field_attributes::deserialize_number_from_string;
 use sqlx::postgres::{PgConnectOptions, PgSslMode};
 
+// use crate::domain::EmailAddress;
+
 pub static SETTINGS: Lazy<Settings> = Lazy::new(|| {
     let run_mode = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
 
@@ -36,6 +38,7 @@ pub static SETTINGS: Lazy<Settings> = Lazy::new(|| {
 pub struct Settings {
     pub app: AppSettings,
     pub database: DatabaseSettings,
+    pub email_client: EmailClientSettings,
 }
 
 #[derive(serde::Deserialize)]
@@ -75,4 +78,14 @@ impl DatabaseSettings {
     pub fn with_db(&self) -> PgConnectOptions {
         self.without_db().database(&self.name)
     }
+}
+
+#[derive(serde::Deserialize)]
+#[allow(unused)]
+pub struct EmailClientSettings {
+    pub api_key: Secret<String>,
+    pub base_url: String,
+    pub sender: crate::domain::EmailAddress,
+    pub sandbox: bool,
+    pub timeout_millis: u64,
 }

@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use sqlx::postgres::PgPoolOptions;
 
+use zero2prod::email::EmailClient;
 use zero2prod::settings::SETTINGS;
 use zero2prod::startup::run_server;
 use zero2prod::telemetry::{build_subscriber, register_global_subscriber};
@@ -24,5 +25,7 @@ async fn main() -> std::io::Result<()> {
         TcpListener::bind(address).unwrap_or_else(|_| panic!("Failed to bind to port {port}"))
     };
 
-    run_server(listener, &pool)?.await
+    let email_client = EmailClient::default();
+
+    run_server(listener, &pool, email_client)?.await
 }
