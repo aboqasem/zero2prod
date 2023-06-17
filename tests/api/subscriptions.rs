@@ -14,7 +14,7 @@ use zero2prod::startup::SUBSCRIPTIONS_PATH;
 
 use crate::utils::{spawn_server, App, links};
 
-async fn post_to_subscriptions(client: &reqwest::Client, address: &str, body: String) -> reqwest::Response {
+async fn post_to_subscriptions(client: &reqwest::Client, address: &reqwest::Url, body: String) -> reqwest::Response {
     client
         .post(format!("{address}{SUBSCRIPTIONS_PATH}"))
         .body(body)

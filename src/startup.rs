@@ -7,8 +7,8 @@ use tracing_actix_web::TracingLogger;
 use crate::email::EmailClient;
 use crate::routes::{health_check, subscribe};
 
-pub static HEALTH_PATH: &str = "/health";
-pub static SUBSCRIPTIONS_PATH: &str = "/subscriptions";
+pub static HEALTH_PATH: &str = "health";
+pub static SUBSCRIPTIONS_PATH: &str = "subscriptions";
 
 pub fn run_server(
     listener: TcpListener,
