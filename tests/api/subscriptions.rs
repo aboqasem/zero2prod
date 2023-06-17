@@ -1,5 +1,6 @@
 extern crate zero2prod;
 
+use claims::assert_ge;
 use fake::faker::internet::en::SafeEmail;
 use fake::faker::name::en::Name;
 use fake::Fake;
@@ -11,7 +12,7 @@ use zero2prod::domain::SubscriptionStatus;
 use zero2prod::email::send_grid;
 use zero2prod::startup::SUBSCRIPTIONS_PATH;
 
-use crate::utils::{spawn_server, App};
+use crate::utils::{spawn_server, App, links};
 
 async fn post_to_subscriptions(client: &reqwest::Client, address: &str, body: String) -> reqwest::Response {
     client
@@ -24,7 +25,7 @@ async fn post_to_subscriptions(client: &reqwest::Client, address: &str, body: St
 }
 
 #[tokio::test]
-async fn subscribe_with_valid_data_should_create_subscription() {
+async fn subscribe_with_valid_data_should_create_pending_subscription() {
     // Given
     let App {
         address,
@@ -74,7 +75,35 @@ async fn subscribe_with_valid_data_should_create_subscription() {
 
     assert_eq!(saved_subscription.email, email);
     assert_eq!(saved_subscription.name, name);
-    assert_eq!(saved_subscription.status, SubscriptionStatus::Confirmed);
+    assert_eq!(saved_subscription.status, SubscriptionStatus::PendingConfirmation);
+}
+
+#[tokio::test]
+async fn subscribe_should_send_confirmation_email() {
+    // Given
+    let App { address, email_server, .. } = spawn_server().await;
+    let client = reqwest::Client::new();
+
+    let name: String = Name().fake();
+    let email: String = SafeEmail().fake();
+    let body = format!("name={name}&email={email}");
+
+    Mock::given(method(Method::POST))
+        .and(path(send_grid::SEND_PATH))
+        .respond_with(ResponseTemplate::new(StatusCode::OK))
+        .expect(1)
+        .mount(&email_server)
+        .await;
+
+    // When
+    let _ = post_to_subscriptions(&client, &address, body).await;
+
+    // Then
+    let email_request = &email_server.received_requests().await.unwrap()[0];
+    let email_body: send_grid::MailSendBody = serde_json::from_slice(&email_request.body).unwrap();
+    let links = links(&email_body.content[0].value);
+
+    assert_ge!(links.len(), 1);
 }
 
 #[tokio::test]
