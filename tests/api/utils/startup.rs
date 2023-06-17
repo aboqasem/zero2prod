@@ -33,7 +33,8 @@ pub async fn spawn_server() -> App {
     let pool = create_random_database().await;
 
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
-    let address = reqwest::Url::parse(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
+    let address =
+        reqwest::Url::parse(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
 
     let email_server = MockServer::start().await;
     let email_client = EmailClient::new(

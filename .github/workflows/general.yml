@@ -47,4 +47,4 @@ jobs:
         with:
           components: rustfmt
       - name: Enforce formatting
-        run: cargo fmt --check
+        run: ./scripts/fmt

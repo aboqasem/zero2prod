@@ -12,9 +12,13 @@ use zero2prod::domain::SubscriptionStatus;
 use zero2prod::email::send_grid;
 use zero2prod::startup::SUBSCRIPTIONS_PATH;
 
-use crate::utils::{spawn_server, App, links};
+use crate::utils::{links, spawn_server, App};
 
-async fn post_to_subscriptions(client: &reqwest::Client, address: &reqwest::Url, body: String) -> reqwest::Response {
+async fn post_to_subscriptions(
+    client: &reqwest::Client,
+    address: &reqwest::Url,
+    body: String,
+) -> reqwest::Response {
     client
         .post(format!("{address}{SUBSCRIPTIONS_PATH}"))
         .body(body)
@@ -41,9 +45,9 @@ async fn subscribe_with_valid_data_should_create_pending_subscription() {
         "SELECT email, name FROM subscriptions WHERE email = $1",
         email
     )
-        .fetch_one(&pool)
-        .await
-        .expect_err("Should not find a subscription with this email");
+    .fetch_one(&pool)
+    .await
+    .expect_err("Should not find a subscription with this email");
 
     Mock::given(method(Method::POST))
         .and(path(send_grid::SEND_PATH))
@@ -69,19 +73,26 @@ async fn subscribe_with_valid_data_should_create_pending_subscription() {
         "#,
         email
     )
-        .fetch_one(&pool)
-        .await
-        .expect("Should find a subscription with this email");
+    .fetch_one(&pool)
+    .await
+    .expect("Should find a subscription with this email");
 
     assert_eq!(saved_subscription.email, email);
     assert_eq!(saved_subscription.name, name);
-    assert_eq!(saved_subscription.status, SubscriptionStatus::PendingConfirmation);
+    assert_eq!(
+        saved_subscription.status,
+        SubscriptionStatus::PendingConfirmation
+    );
 }
 
 #[tokio::test]
 async fn subscribe_should_send_confirmation_email() {
     // Given
-    let App { address, email_server, .. } = spawn_server().await;
+    let App {
+        address,
+        email_server,
+        ..
+    } = spawn_server().await;
     let client = reqwest::Client::new();
 
     let name: String = Name().fake();

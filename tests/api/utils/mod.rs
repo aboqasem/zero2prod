@@ -1,5 +1,5 @@
-pub use startup::*;
 pub use extract::*;
+pub use startup::*;
 
-mod startup;
 mod extract;
+mod startup;
