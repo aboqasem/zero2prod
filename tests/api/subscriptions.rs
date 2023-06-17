@@ -9,8 +9,19 @@ use wiremock::{Mock, ResponseTemplate};
 
 use zero2prod::domain::SubscriptionStatus;
 use zero2prod::email::send_grid;
+use zero2prod::startup::SUBSCRIPTIONS_PATH;
 
 use crate::utils::{spawn_server, App};
+
+async fn post_to_subscriptions(client: &reqwest::Client, address: &str, body: String) -> reqwest::Response {
+    client
+        .post(format!("{address}{SUBSCRIPTIONS_PATH}"))
+        .body(body)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("Failed to POST {SUBSCRIPTIONS_PATH}"))
+}
 
 #[tokio::test]
 async fn subscribe_with_valid_data_should_create_subscription() {
@@ -29,9 +40,9 @@ async fn subscribe_with_valid_data_should_create_subscription() {
         "SELECT email, name FROM subscriptions WHERE email = $1",
         email
     )
-    .fetch_one(&pool)
-    .await
-    .expect_err("Should not find a subscription with this email");
+        .fetch_one(&pool)
+        .await
+        .expect_err("Should not find a subscription with this email");
 
     Mock::given(method(Method::POST))
         .and(path(send_grid::SEND_PATH))
@@ -45,24 +56,21 @@ async fn subscribe_with_valid_data_should_create_subscription() {
     let body = format!("name={name}&email={email}");
 
     // When
-    let res = client
-        .post(format!("{address}/subscriptions"))
-        .body(body)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .send()
-        .await
-        .expect("Failed to POST /subscriptions");
+    let res = post_to_subscriptions(&client, &address, body).await;
 
     // Then
-    assert_eq!(201, res.status().as_u16());
+    assert_eq!(StatusCode::CREATED, res.status());
 
     let saved_subscription = sqlx::query!(
-        r#"SELECT email, name, status as "status: SubscriptionStatus"  FROM subscriptions WHERE email = $1"#,
+        r#"
+        SELECT email, name, status as "status: SubscriptionStatus"
+        FROM subscriptions WHERE email = $1
+        "#,
         email
     )
-    .fetch_one(&pool)
-    .await
-    .expect("Should find a subscription with this email");
+        .fetch_one(&pool)
+        .await
+        .expect("Should find a subscription with this email");
 
     assert_eq!(saved_subscription.email, email);
     assert_eq!(saved_subscription.name, name);
@@ -94,19 +102,13 @@ async fn subscribe_with_invalid_data_should_fail() {
 
     for (body, desc) in invalid_bodies {
         // When
-        let res = client
-            .post(format!("{address}/subscriptions"))
-            .body(body)
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .send()
-            .await
-            .expect("Failed to POST /subscriptions");
+        let res = post_to_subscriptions(&client, &address, body).await;
 
         // Then
         assert_eq!(
-            400,
-            res.status().as_u16(),
-            "Should fail with 400 when body is {desc}"
+            StatusCode::BAD_REQUEST,
+            res.status(),
+            "Should fail with BAD_REQUEST when body is {desc}"
         );
     }
 }

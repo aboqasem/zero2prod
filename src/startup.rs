@@ -7,6 +7,9 @@ use tracing_actix_web::TracingLogger;
 use crate::email::EmailClient;
 use crate::routes::{health_check, subscribe};
 
+pub static HEALTH_PATH: &str = "/health";
+pub static SUBSCRIPTIONS_PATH: &str = "/subscriptions";
+
 pub fn run_server(
     listener: TcpListener,
     pool: &PgPool,
@@ -19,13 +22,13 @@ pub fn run_server(
         HttpServer::new(move || {
             App::new()
                 .wrap(TracingLogger::default())
-                .route("/health", web::get().to(health_check))
-                .route("/subscriptions", web::post().to(subscribe))
+                .route(HEALTH_PATH, web::get().to(health_check))
+                .route(SUBSCRIPTIONS_PATH, web::post().to(subscribe))
                 .app_data(pool.clone())
                 .app_data(email_client.clone())
         })
-        .listen(listener)?
-        .run()
+            .listen(listener)?
+            .run()
     };
 
     Ok(server)
