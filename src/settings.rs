@@ -3,6 +3,7 @@ use std::env;
 use config::{Config, Environment, File};
 use once_cell::sync::Lazy;
 use secrecy::{ExposeSecret, Secret};
+use serde::Deserialize;
 use serde_aux::field_attributes::deserialize_number_from_string;
 use sqlx::postgres::{PgConnectOptions, PgSslMode};
 
@@ -41,12 +42,33 @@ pub struct Settings {
     pub email_client: EmailClientSettings,
 }
 
+#[derive(Clone)]
+pub struct AppBaseUrl(pub reqwest::Url);
+
+pub fn deserialize_url_from_string<'de, D>(deserializer: D) -> Result<reqwest::Url, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let str = String::deserialize(deserializer)?;
+
+    reqwest::Url::parse(str.as_str()).map_err(serde::de::Error::custom)
+}
+
+pub fn deserialize_app_base_url_from_string<'de, D>(deserializer: D) -> Result<AppBaseUrl, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    Ok(AppBaseUrl(deserialize_url_from_string(deserializer)?))
+}
+
 #[derive(serde::Deserialize)]
 #[allow(unused)]
 pub struct AppSettings {
     pub host: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
+    #[serde(deserialize_with = "deserialize_app_base_url_from_string")]
+    pub base_url: AppBaseUrl,
 }
 
 #[derive(serde::Deserialize)]

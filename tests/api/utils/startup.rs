@@ -11,7 +11,7 @@ use wiremock::MockServer;
 
 use zero2prod::domain::EmailAddress;
 use zero2prod::email::EmailClient;
-use zero2prod::settings::SETTINGS;
+use zero2prod::settings::{AppBaseUrl, SETTINGS};
 use zero2prod::startup::run_server;
 use zero2prod::telemetry::{build_subscriber, register_global_subscriber};
 
@@ -45,7 +45,8 @@ pub async fn spawn_server() -> App {
         true,
     );
 
-    let server = run_server(listener, &pool, email_client).expect("Failed to start server");
+    let server = run_server(listener, &pool, email_client, AppBaseUrl(address.clone()))
+        .expect("Failed to start server");
 
     tokio::spawn(server);
 

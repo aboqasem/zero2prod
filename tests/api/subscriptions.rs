@@ -8,9 +8,9 @@ use reqwest::{Method, StatusCode};
 use wiremock::matchers::{header, header_regex, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use zero2prod::domain::SubscriptionStatus;
+use zero2prod::domain::{RawSubscriber, Subscriber, SubscriptionStatus};
 use zero2prod::email::send_grid;
-use zero2prod::startup::SUBSCRIPTIONS_PATH;
+use zero2prod::startup::{SUBSCRIPTIONS_CONFIRM_PATH, SUBSCRIPTIONS_PATH};
 
 use crate::utils::{links, spawn_server, App};
 
@@ -26,6 +26,28 @@ async fn post_to_subscriptions(
         .send()
         .await
         .unwrap_or_else(|_| panic!("Failed to POST {SUBSCRIPTIONS_PATH}"))
+}
+
+pub async fn post_valid_body_to_subscriptions(
+    client: &reqwest::Client,
+    address: &reqwest::Url,
+) -> (reqwest::Response, Subscriber) {
+    let name: String = Name().fake();
+    let email: String = SafeEmail().fake();
+    let body = format!("name={name}&email={email}");
+
+    (
+        post_to_subscriptions(client, address, body).await,
+        RawSubscriber { name, email }.try_into().unwrap(),
+    )
+}
+
+pub fn base_send_grid_send_endpoint_mock() -> Mock {
+    Mock::given(method(Method::POST))
+        .and(path(send_grid::SEND_PATH))
+        .and(header_regex("Authorization", r"Bearer \w+"))
+        .and(header("Content-Type", "application/json"))
+        .respond_with(ResponseTemplate::new(StatusCode::OK))
 }
 
 #[tokio::test]
@@ -49,11 +71,7 @@ async fn subscribe_with_valid_data_should_create_pending_subscription() {
     .await
     .expect_err("Should not find a subscription with this email");
 
-    Mock::given(method(Method::POST))
-        .and(path(send_grid::SEND_PATH))
-        .and(header_regex("Authorization", r"Bearer \w+"))
-        .and(header("Content-Type", "application/json"))
-        .respond_with(ResponseTemplate::new(StatusCode::OK))
+    base_send_grid_send_endpoint_mock()
         .expect(1)
         .mount(&email_server)
         .await;
@@ -95,26 +113,27 @@ async fn subscribe_should_send_confirmation_email() {
     } = spawn_server().await;
     let client = reqwest::Client::new();
 
-    let name: String = Name().fake();
-    let email: String = SafeEmail().fake();
-    let body = format!("name={name}&email={email}");
-
-    Mock::given(method(Method::POST))
-        .and(path(send_grid::SEND_PATH))
-        .respond_with(ResponseTemplate::new(StatusCode::OK))
+    base_send_grid_send_endpoint_mock()
         .expect(1)
         .mount(&email_server)
         .await;
 
     // When
-    let _ = post_to_subscriptions(&client, &address, body).await;
+    post_valid_body_to_subscriptions(&client, &address).await;
 
     // Then
     let email_request = &email_server.received_requests().await.unwrap()[0];
     let email_body: send_grid::MailSendBody = serde_json::from_slice(&email_request.body).unwrap();
-    let links = links(&email_body.content[0].value);
+    let email_links = links(&email_body.content[0].value);
+    assert_ge!(email_links.len(), 1);
 
-    assert_ge!(links.len(), 1);
+    let confirmation_link = reqwest::Url::parse(email_links[0].as_str()).unwrap();
+
+    assert_eq!(confirmation_link.host_str(), address.host_str());
+    assert_eq!(
+        confirmation_link.path(),
+        format!("/{SUBSCRIPTIONS_CONFIRM_PATH}")
+    );
 }
 
 #[tokio::test]

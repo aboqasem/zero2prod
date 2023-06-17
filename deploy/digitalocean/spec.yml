@@ -25,6 +25,9 @@ services:
       - path: /
 
     envs:
+      - key: APP_APP__BASE_URL
+        scope: RUN_TIME
+        value: ${APP_URL}
       - key: APP_DATABASE__HOST
         scope: RUN_TIME
         value: ${newsletter.HOSTNAME}

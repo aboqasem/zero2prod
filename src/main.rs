@@ -27,5 +27,5 @@ async fn main() -> std::io::Result<()> {
 
     let email_client = EmailClient::default();
 
-    run_server(listener, &pool, email_client)?.await
+    run_server(listener, &pool, email_client, SETTINGS.app.base_url.clone())?.await
 }
