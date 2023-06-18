@@ -1,7 +1,7 @@
 use actix_web::{web, HttpResponse, Responder};
 use rand::distributions;
 use rand::{thread_rng, Rng};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::domain::{RawSubscriber, Subscriber, SubscriptionStatus};
@@ -34,24 +34,31 @@ pub async fn subscribe(
         })
     };
 
-    let subscriber_id = match insert_subscriber(&subscriber, &pool).await {
+    let mut transaction = match pool.begin().await {
+        Ok(t) => t,
+        Err(_) => return internal_server_error(),
+    };
+
+    let subscriber_id = match insert_subscriber(&subscriber, &mut transaction).await {
         Ok(id) => id,
         Err(_) => return internal_server_error(),
     };
 
-    let subscription_token = match insert_random_subscription_token(&subscriber_id, &pool).await {
-        Ok(token) => token,
-        Err(_) => return internal_server_error(),
-    };
+    let subscription_token =
+        match insert_random_subscription_token(&subscriber_id, &mut transaction).await {
+            Ok(token) => token,
+            Err(_) => return internal_server_error(),
+        };
 
-    if send_confirmation_email(
-        &email_client,
-        &subscriber,
-        &app_base_url.as_ref().0,
-        &subscription_token,
-    )
-    .await
-    .is_err()
+    if transaction.commit().await.is_err()
+        || send_confirmation_email(
+            &email_client,
+            &subscriber,
+            &app_base_url.as_ref().0,
+            &subscription_token,
+        )
+        .await
+        .is_err()
     {
         return internal_server_error();
     };
@@ -62,7 +69,10 @@ pub async fn subscribe(
 }
 
 #[tracing::instrument(name = "Inserting subscriber to DB", skip_all)]
-async fn insert_subscriber(subscriber: &Subscriber, pool: &PgPool) -> Result<Uuid, sqlx::Error> {
+async fn insert_subscriber(
+    subscriber: &Subscriber,
+    transaction: &mut Transaction<'_, Postgres>,
+) -> Result<Uuid, sqlx::Error> {
     let subscriber_id = Uuid::new_v4();
     sqlx::query!(
         r#"
@@ -75,7 +85,7 @@ async fn insert_subscriber(subscriber: &Subscriber, pool: &PgPool) -> Result<Uui
         chrono::Utc::now(),
         SubscriptionStatus::PendingConfirmation as _
     )
-    .execute(pool)
+    .execute(transaction)
     .await
     .map_err(|e| {
         tracing::error!("Failed to insert subscriber: {}", e);
@@ -88,7 +98,7 @@ async fn insert_subscriber(subscriber: &Subscriber, pool: &PgPool) -> Result<Uui
 #[tracing::instrument(name = "Inserting random subscription token to DB", skip_all)]
 async fn insert_random_subscription_token(
     subscription_id: &Uuid,
-    pool: &PgPool,
+    transaction: &mut Transaction<'_, Postgres>,
 ) -> Result<String, sqlx::Error> {
     let token = gen_random_string(25);
     sqlx::query!(
@@ -99,7 +109,7 @@ async fn insert_random_subscription_token(
         token,
         subscription_id
     )
-    .execute(pool)
+    .execute(transaction)
     .await
     .map_err(|e| {
         tracing::error!("Failed to insert subscription token: {}", e);

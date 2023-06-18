@@ -1,6 +1,6 @@
 use crate::domain::SubscriptionStatus;
 use actix_web::{web, HttpResponse, Responder};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
@@ -14,21 +14,37 @@ pub async fn confirm_subscription(
     params: web::Query<ConfirmSubscriptionParameters>,
     pool: web::Data<PgPool>,
 ) -> impl Responder {
+    let internal_server_error = || HttpResponse::InternalServerError().finish();
+
+    let mut transaction = match pool.begin().await {
+        Ok(t) => t,
+        Err(_) => return internal_server_error(),
+    };
+
     let subscription_token = &params.token;
     let subscription_id =
-        match get_subscription_id_of_subscription_token(subscription_token, &pool).await {
+        match get_subscription_id_of_subscription_token(subscription_token, &mut transaction).await
+        {
             Ok(v) => match v {
                 None => return HttpResponse::Unauthorized().finish(),
                 Some(v) => v,
             },
-            Err(_) => return HttpResponse::InternalServerError().finish(),
+            Err(_) => return internal_server_error(),
         };
 
-    if update_subscription_status(&subscription_id, &SubscriptionStatus::Confirmed, &pool)
-        .await
-        .is_err()
+    if update_subscription_status(
+        &subscription_id,
+        &SubscriptionStatus::Confirmed,
+        &mut transaction,
+    )
+    .await
+    .is_err()
     {
-        return HttpResponse::InternalServerError().finish();
+        return internal_server_error();
+    }
+
+    if transaction.commit().await.is_err() {
+        return internal_server_error();
     }
 
     HttpResponse::Ok().finish()
@@ -37,13 +53,13 @@ pub async fn confirm_subscription(
 #[tracing::instrument(name = "Get subscription id of subscription token", skip_all)]
 async fn get_subscription_id_of_subscription_token(
     token: &str,
-    pool: &PgPool,
+    transaction: &mut Transaction<'_, Postgres>,
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let subscription_token = sqlx::query!(
         "SELECT subscription_id FROM subscription_tokens WHERE id = $1",
         token
     )
-    .fetch_optional(pool)
+    .fetch_optional(transaction)
     .await
     .map_err(|e| {
         tracing::error!("Failed to fetch subscription id: {}", e);
@@ -57,14 +73,14 @@ async fn get_subscription_id_of_subscription_token(
 async fn update_subscription_status(
     subscription_id: &Uuid,
     to_status: &SubscriptionStatus,
-    pool: &PgPool,
+    transaction: &mut Transaction<'_, Postgres>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE subscriptions SET status = $1 WHERE id = $2",
         to_status as _,
         subscription_id
     )
-    .execute(pool)
+    .execute(transaction)
     .await
     .map_err(|e| {
         tracing::error!("Failed to update subscription status: {}", e);
